@@ -1,67 +1,108 @@
-import numpy as np
-import matplotlib.pyplot as plt
-import pandas as pd
+import numpy as np, pandas as pd, matplotlib.pyplot as plt
 from os import getcwd
 
 from setuptools.command.test import test
-from sklearn.cross_validation import train_test_split
-from sklearn.metrics import confusion_matrix, classification_report
-from sklearn.metrics import accuracy_score
+from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV
+
+from sklearn.metrics import confusion_matrix, classification_report, accuracy_score
 from sklearn.tree import DecisionTreeClassifier, export_graphviz
-import re
-import json
+import re, nltk
+from nltk.stem import WordNetLemmatizer
+from sklearn.svm import LinearSVC
+import sklearn.metrics
+from sklearn.feature_extraction.text import TfidfVectorizer
+
 from Functions import *
 from nltk.stem.porter import *
+from sklearn.ensemble import RandomForestClassifier, VotingClassifier, BaggingClassifier, AdaBoostClassifier, GradientBoostingClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.svm import LinearSVC, SVC
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.naive_bayes import MultinomialNB
 
-data = get_original_data()
+# data = get_original_data()
+# clean_and_save_data(data)
+clean_data = get_clean_data()
+# ------------------------------------------------------------------------------------
+# todo: remove from valid data ingirdients that dont exist in train data
+all_train_ingr = set()
 
-data["train"].columns
-data["train"].index
+for ingr_list in clean_data["train"]["ingredients_clean"]:
+    all_train_ingr = all_train_ingr.union(set(ingr_list.split(",")))
 
-def clean_ing_list(ing_list):
-    return [clean_ing(ing) for ing in ing_list]
+valid_clean_ing = []
+for ingr_list in clean_data["valid"]["ingredients_clean"]:
+    filter_ingr = []
+    for ing in ingr_list.split(","):
+        if ing in all_train_ingr:
+            filter_ingr.append(ing)
+    valid_clean_ing.append(",".join(filter_ingr))
 
-def clean_ing(ing):
-    # remove numbers and chars like (...),[...],{...}, ', "," , . , /, word!, number%,
-    # note that im leaving & un touched
-    ing = str(ing).lower()
-    ing = ing.encode("ascii","ignore") #convert_to_ascii
-    ing = re.sub('\((.*)\)\s*', '', ing).strip() #remove anything between ()
-    ing = re.sub('\[(.*)\]\s*', '', ing).strip() #remove anything between []
-    ing = re.sub('\{(.*)\}\s*', '', ing).strip() #remove anything between {}
-    ing = re.sub('\'', '', ing).strip() #remove '
-    ing = re.sub('\,', '', ing).strip() #remove ,
-    ing = re.sub('\.', '', ing).strip() #remove .
-    ing = re.sub('\/', '', ing).strip() #remove /
-    ing = re.sub('[a-z]*!\s*', '', ing).strip() #remove ! and any word that comes before it
-    ing = re.sub('[a-z0-9]*%\s*', '', ing).strip() #remove % and any number\word that comes before it
-    ing = re.sub('-\s*', '', ing).strip() #remove -
-    ing = re.sub('[lb|kg|oz]', '', ing).strip() #remove units lb, kg, oz,
-    if stopwords.words('english') in ing:
+clean_data["valid"]["ingredients_clean_filtered"] = pd.Series(valid_clean_ing)
+# ------------------------------------------------------------------------------------
+
+# todo: tf_idf
+# c = CountVectorizer()
+# counts = c.fit_transform(list(clean_data["train"]["ingredients_clean"]))
+# c.vocabulary_
+# tf_idf = pd.DataFrame(data=counts.toarray()).to_dense()
+
+vectorizertr = TfidfVectorizer(ngram_range = ( 1 , 1 ),
+                               analyzer="word",
+                               max_df = .57,
+                               binary=False ,
+                               token_pattern=r'\w+' ,
+                               sublinear_tf=False)
+tf_idf = vectorizertr.fit_transform(clean_data["train"]["ingredients_clean"]).todense()
+tf_idf_valid = vectorizertr.transform(clean_data["valid"]["ingredients_clean_filtered"]).todense()
+
+# ------------------------------------------------------------------------------------
+# todo: train test for the classifier from the original train
+X = {"all": tf_idf}
+y = {"all": clean_data["train"]["cuisine"]}
+X["train"], X["test"], y["train"], y["test"] = train_test_split(tf_idf, clean_data["train"]["cuisine"] ,test_size=0.3)
+
+# ------------------------------------------------------------------------------------
+# todo: all classifers
+classifiers = [
+    # ('Log_Reg', LogisticRegression()), # train: 0.8 , test: 0.774
+    # ('Dec_Tree', DecisionTreeClassifier()), # train: 0.999 , test: 0.616
+    # ('Random Forest', RandomForestClassifier()), # train: 0.994 , test: 0.694
+    # ('Multinomial NB', MultinomialNB()), # train: 0.68 , test: 0.66
+    # # ('SVM', SVC()), #too slow
+    # ('Liniar SVM', LinearSVC()), # train: 0.864 , test: 0.785
+    ("KNN", KNeighborsClassifier())  #too slow
+   ]
+
+#find the best classifier
+results = pd.DataFrame(index=["train","test"])
+for clf_name, clf in classifiers:
+    clf.fit(X["train"], y["train"])
+    results[clf_name] = [clf.score(X["train"], y["train"]), clf.score(X["test"], y["test"])]
+print(results)
+
+# Voting classier
+clsf_voting = VotingClassifier(estimators=classifiers, voting="hard")
+clsf_voting.fit(X["train"], y["train"])
+results["Voting"] = [clsf_voting.score(X["train"], y["train"]), clsf_voting.score(X["test"], y["test"])]
+print(results)
 
 
+# ------------------------------------------------------------------------------------
+# # TODO: K-Fold on best classifier \ or maybe for all classifers and see who is best
+# K_FOLDS_results = {}
+# for name, model in classifiers:
+#     model.fit(X["all"], y["all"])
+#     K_FOLDS_results[name] = cross_val_score(model, X["all"], y["all"], cv=5, scoring = 'accuracy')
+#     print("%s: %f (%f)" % (name, K_FOLDS_results[name].mean(), K_FOLDS_results[name].std()))
+#     print("Scores : " + (5 * "{:.3f} ").format(*K_FOLDS_results[name]))
 
-     # in stopwords.words('english') #remove stop words
-     # remove all extra white spaces
 
-
-data["train"]["ingredients_clean"] = [clean_ing_list(ing_list) for ing_list in data["train"].ingredients]
-
-
-# def ingr_prep(ingr):
-#    ingr_1 = re.sub('\((.*)\)\s*', '', ingr).lower().strip()
-#    ingr_2 = re.sub(' mix', '', ingr_1).strip()
-#    ingr_3 = re.sub('\%', '', ingr_2).strip()
-#    ingr_4 = re.sub('[\,\.\']', ' ', ingr_3).strip()
-#    ingr_5 = re.sub('.*\/.*to.*lb. ', '', ingr_4).strip()
-#    ingr_6 = re.sub('\-', '_', ingr_5).strip()
-#    ingr_7 = re.sub('&', '', ingr_6).strip()
-#    ingr_8 = re.sub('\'', '', ingr_7).strip()
-#    ingr_9 = re.sub('!', '', ingr_8).strip()
-#    ingr_10 = ingr_9.encode("ascii","ignore")
-#    ingr_LAST = re.sub(' ', '_', ingr_10).strip()
-#    return ingr_LAST
-#
-#
-# data['ingr_new'] = [pd.Series([ingr_prep(ingr) for ingr in list]) for list in data['ingredients']]
-# data['ingr_string'] = [','.join(z).strip() for z in data['ingr_new']]
+# ------------------------------------------------------------------------------------
+# todo: make create_submission function
+chosen_clsf = LinearSVC()
+chosen_clsf.fit(X["all"], y["all"])
+submision_df = pd.DataFrame(data = chosen_clsf.predict(tf_idf_valid),
+                           index = clean_data["valid"].id,
+                            columns=["cuisine"])
+submision_df.to_csv(getcwd() + "\\Submission\\subm.csv", sep=',', encoding='utf-8')
