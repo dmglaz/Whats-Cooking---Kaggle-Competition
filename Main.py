@@ -20,6 +20,7 @@ from sklearn.svm import LinearSVC, SVC
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.naive_bayes import MultinomialNB
 
+
 # data = get_original_data()
 # clean_and_save_data(data)
 clean_data = get_clean_data()
@@ -40,13 +41,7 @@ for ingr_list in clean_data["valid"]["ingredients_clean"]:
 
 clean_data["valid"]["ingredients_clean_filtered"] = pd.Series(valid_clean_ing)
 
-# ------------------------------------------------------------------------------------
-# tf_idf
-# c = CountVectorizer()
-# counts = c.fit_transform(list(clean_data["train"]["ingredients_clean"]))
-# c.vocabulary_
-# tf_idf = pd.DataFrame(data=counts.toarray()).to_dense()
-
+# ------------------------TF_IDF--------------------------------------------------------
 vectorizertr = TfidfVectorizer(ngram_range = ( 1 , 1 ),
                                analyzer="word",
                                max_df = .57,
@@ -56,24 +51,27 @@ vectorizertr = TfidfVectorizer(ngram_range = ( 1 , 1 ),
 tf_idf = vectorizertr.fit_transform(clean_data["train"]["ingredients_clean"]).todense()
 tf_idf_valid = vectorizertr.transform(clean_data["valid"]["ingredients_clean_filtered"]).todense()
 
-# ------------------------------------------------------------------------------------
-# train test for the classifier from the original train
+# ----------------train test for the classifier from the original train------------------------------
+
 X = {"all": tf_idf}
 y = {"all": clean_data["train"]["cuisine"]}
 X["train"], X["test"], y["train"], y["test"] = train_test_split(tf_idf,
                                                                 clean_data["train"]["cuisine"],
                                                                 test_size=0.3)
 
-# ------------------------------------------------------------------------------------
-# all classifers
+# ---------------------------------all classifers---------------------------------------------------
+
 classifiers = [
     ('Log_Reg', LogisticRegression()), # train: 0.8 , test: 0.774
-    ('Dec_Tree', DecisionTreeClassifier()), # train: 0.999 , test: 0.616
-    ('Random Forest', RandomForestClassifier()), # train: 0.994 , test: 0.694
-    ('Multinomial NB', MultinomialNB()), # train: 0.68 , test: 0.66
-    # ('SVM', SVC()), #too slow
+    # ('Dec_Tree', DecisionTreeClassifier()), # train: 0.999 , test: 0.616
+    # ('Random Forest', RandomForestClassifier()), # train: 0.994 , test: 0.694
+    # ('Multinomial NB', MultinomialNB()), # train: 0.68 , test: 0.66
+    # # ('SVM', SVC()), #too slow
     ('Liniar SVM', LinearSVC()), # train: 0.864 , test: 0.785
-    # ("KNN", KNeighborsClassifier())  #too slow
+    # ("KNN", KNeighborsClassifier()),  #too slow
+    # ("Ada_boost_Log_Reg", AdaBoostClassifier(base_estimator=LogisticRegression(),n_estimators = 10, learning_rate=0.01)), #train: 0.19 , test: 0.19
+    ("Ada_boost_Liniar_SVM", AdaBoostClassifier(base_estimator=LinearSVC(),n_estimators=15, learning_rate=0.01, algorithm="SAMME")), #train: 0.867 , test: 0.786
+    # ("Gradient_boost", GradientBoostingClassifier(max_depth=3,n_estimators=5,learning_rate=0.01)), #too slow
    ]
 
 #find the best classifier
@@ -89,22 +87,10 @@ clsf_voting.fit(X["train"], y["train"])
 results["Voting"] = [clsf_voting.score(X["train"], y["train"]), clsf_voting.score(X["test"], y["test"])]
 print(results)
 
-
-# ------------------------------------------------------------------------------------
-# # TODO: K-Fold on best classifier \ or maybe for all classifers and see who is best
-# K_FOLDS_results = {}
-# for name, model in classifiers:
-#     model.fit(X["all"], y["all"])
-#     K_FOLDS_results[name] = cross_val_score(model, X["all"], y["all"], cv=5, scoring = 'accuracy')
-#     print("%s: %f (%f)" % (name, K_FOLDS_results[name].mean(), K_FOLDS_results[name].std()))
-#     print("Scores : " + (5 * "{:.3f} ").format(*K_FOLDS_results[name]))
-
-
-# ------------------------------------------------------------------------------------
-# submission function
-chosen_clsf = LinearSVC()
+# ------------------------------------submission function------------------------------------------------
+chosen_clsf = AdaBoostClassifier(base_estimator=LinearSVC(),n_estimators=15, learning_rate=0.01, algorithm="SAMME")
 chosen_clsf.fit(X["all"], y["all"])
 submision_df = pd.DataFrame(data = chosen_clsf.predict(tf_idf_valid),
                            index = clean_data["valid"].id,
-                            columns=["cuisine"])
-submision_df.to_csv(getcwd() + "\\Submission\\subm.csv", sep=',', encoding='utf-8')
+                           columns=["cuisine"])
+submision_df.to_csv(getcwd() + "\\Submission\\subm_Ada_boost_Liniar_SVM.csv", sep=',', encoding='utf-8')
