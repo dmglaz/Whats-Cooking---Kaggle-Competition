@@ -24,7 +24,7 @@ from sklearn.naive_bayes import MultinomialNB
 # clean_and_save_data(data)
 clean_data = get_clean_data()
 # ------------------------------------------------------------------------------------
-# todo: remove from valid data ingirdients that dont exist in train data
+# remove from valid data ingirdients that dont exist in train data
 all_train_ingr = set()
 
 for ingr_list in clean_data["train"]["ingredients_clean"]:
@@ -39,9 +39,9 @@ for ingr_list in clean_data["valid"]["ingredients_clean"]:
     valid_clean_ing.append(",".join(filter_ingr))
 
 clean_data["valid"]["ingredients_clean_filtered"] = pd.Series(valid_clean_ing)
-# ------------------------------------------------------------------------------------
 
-# todo: tf_idf
+# ------------------------------------------------------------------------------------
+# tf_idf
 # c = CountVectorizer()
 # counts = c.fit_transform(list(clean_data["train"]["ingredients_clean"]))
 # c.vocabulary_
@@ -57,21 +57,23 @@ tf_idf = vectorizertr.fit_transform(clean_data["train"]["ingredients_clean"]).to
 tf_idf_valid = vectorizertr.transform(clean_data["valid"]["ingredients_clean_filtered"]).todense()
 
 # ------------------------------------------------------------------------------------
-# todo: train test for the classifier from the original train
+# train test for the classifier from the original train
 X = {"all": tf_idf}
 y = {"all": clean_data["train"]["cuisine"]}
-X["train"], X["test"], y["train"], y["test"] = train_test_split(tf_idf, clean_data["train"]["cuisine"] ,test_size=0.3)
+X["train"], X["test"], y["train"], y["test"] = train_test_split(tf_idf,
+                                                                clean_data["train"]["cuisine"],
+                                                                test_size=0.3)
 
 # ------------------------------------------------------------------------------------
-# todo: all classifers
+# all classifers
 classifiers = [
-    # ('Log_Reg', LogisticRegression()), # train: 0.8 , test: 0.774
-    # ('Dec_Tree', DecisionTreeClassifier()), # train: 0.999 , test: 0.616
-    # ('Random Forest', RandomForestClassifier()), # train: 0.994 , test: 0.694
-    # ('Multinomial NB', MultinomialNB()), # train: 0.68 , test: 0.66
-    # # ('SVM', SVC()), #too slow
-    # ('Liniar SVM', LinearSVC()), # train: 0.864 , test: 0.785
-    ("KNN", KNeighborsClassifier())  #too slow
+    ('Log_Reg', LogisticRegression()), # train: 0.8 , test: 0.774
+    ('Dec_Tree', DecisionTreeClassifier()), # train: 0.999 , test: 0.616
+    ('Random Forest', RandomForestClassifier()), # train: 0.994 , test: 0.694
+    ('Multinomial NB', MultinomialNB()), # train: 0.68 , test: 0.66
+    # ('SVM', SVC()), #too slow
+    ('Liniar SVM', LinearSVC()), # train: 0.864 , test: 0.785
+    # ("KNN", KNeighborsClassifier())  #too slow
    ]
 
 #find the best classifier
@@ -99,7 +101,7 @@ print(results)
 
 
 # ------------------------------------------------------------------------------------
-# todo: make create_submission function
+# submission function
 chosen_clsf = LinearSVC()
 chosen_clsf.fit(X["all"], y["all"])
 submision_df = pd.DataFrame(data = chosen_clsf.predict(tf_idf_valid),
